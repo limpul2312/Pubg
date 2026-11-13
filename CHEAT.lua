@@ -1,7 +1,7 @@
 -- ==============================================================================
 -- ============================ BẮT ĐẦU FULL LOGIC MOD ==========================
 -- ==============================================================================
-local logFilePath = "/storage/emulated/0/Android/data/com.tencent.ig/files/ZENKO/log.c"
+local logFilePath = "/storage/emulated/0/Android/data/com.tencent.ig/files/MMK/log.c"
 
 local function WriteLogMessage(message)
     local file = io.open(logFilePath, "a")
@@ -16,7 +16,7 @@ end
 
 
 local function Notify(msg)
-    local s = "[ZENKO VIP New] " .. tostring(msg)
+    local s = "[YAHIKO VIP New] " .. tostring(msg)
     pcall(function() if _G.LexusNotify then _G.LexusNotify(s) end end)
     pcall(function()
         local sh = import("ScriptHelperClient")
@@ -235,7 +235,7 @@ _G.LexusState = _G.LexusState or {
     PrevGraphicsState = {}
 }
 
-local limitTime = os.time({ year = 2026, month = 11, day = 30, hour = 23, min = 59, sec = 0 })
+local limitTime = os.time({ year = 2027, month = 11, day = 30, hour = 23, min = 59, sec = 0 })
 local currentTime = os.time(os.date("!*t"))
 local isExpired = false
 
@@ -1159,7 +1159,7 @@ local function GetConfigPaths(fileName)
     return paths
 end
 
-local ConfigFileName = "zenko_settings.txt"
+local ConfigFileName = "YAHIKO_settings.txt"
 _G.LastConfigSaveStr = ""
 
 -- HÀM LƯU CONFIG
@@ -1325,7 +1325,7 @@ function _G.InitModMenuTab()
     -- 1. TẠO BẢNG ID ẢO VỚI TEXT MỚI (Hỗ trợ 2 ngôn ngữ)
     local FakeTextMap = {
         [999000] = T(
-            "ZENKO MOD VIP"
+            "@YAHIKO_CH VIP"
         ),
 
         [999001] = T(
@@ -3291,7 +3291,7 @@ function _G.InitModMenuTab()
             {
                 Key = "ModMenu_SkinOpenLink",
                 UI = AliasMap.Switcher,
-                Text = T("Panduan Mod Skin Topi/Ransel (Link)", "Mod Skin Guide (Link)"),
+                Text = T("Hapus sampah", "Clear cache"),
                 GetFunc = function()
                     return
                         _G.LexusConfig.SkinOpenLink
@@ -3301,7 +3301,7 @@ function _G.InitModMenuTab()
                         pcall(function()
                             local Web = require("client.slua.logic.url.logic_webview_sdk"); if Web and Web.OpenURL then
                                 Web
-                                    :OpenURL("https://t.me/ZENKOADMIN")
+                                    :OpenURL("")
                             end
                         end)
                     end
@@ -3869,11 +3869,11 @@ local function ShowLexusVIPMenu()
         if not Msg or not Msg.Show then return end
 
         local function Step_ScamAlert()
-            local title = _G.LexusLang == "EN" and "SCAM ALERT" or "PERINGATAN PENIPUAN MOD"
+            local title = _G.LexusLang == "EN" and "YAHIKO OWNER INFORMATION" or "INFORMASI OWNER YAHIKO"
             local content = _G.LexusLang == "EN"
-                and "Join my Telegram to avoid scammers selling free mods. TELE @ZENKOADMIN"
+                and "OWNER TELEGRAM : @YAHIKO_OWN\nCHANNEL TELEGRAM : @YAHIKO_CH\nOWNER WHATSAPP : 085138703742"
                 or
-                "Bergabunglah dengan Telegram Saya Untuk Menghindari Para Penjual Mod Gratis.\nTELEGRAM @ZENKOADMIN\nHATI-HATI DENGAN PENIPU YANG MENJUAL MOD GRATIS, SAYA HANYA PUNYA 1 AKUN TELEGRAM DAN 1 AKUN WA"
+                "OWNER TELEGRAM : @YAHIKO_OWN\nCHANNEL TELEGRAM : @YAHIKO_CH\nOWNER WHATSAPP : 085138703742"
             local btn1 = _G.LexusLang == "EN" and "JOIN" or "GABUNG"
             local btn2 = _G.LexusLang == "EN" and "CLOSE" or "TUTUP"
 
@@ -3881,7 +3881,7 @@ local function ShowLexusVIPMenu()
                 function()
                     local Web = require("client.slua.logic.url.logic_webview_sdk"); if Web and Web.OpenURL then
                         Web
-                            :OpenURL("https://t.me/+iYCBeFvCAzZhOTRl")
+                            :OpenURL("https://t.me/YAHIKO_CH")
                     end
                 end, function() end, btn1, btn2)
             _G.LexusState.MenuStep = 99
@@ -3889,12 +3889,12 @@ local function ShowLexusVIPMenu()
         end
 
         local function Step_Welcome()
-            local title = _G.LexusLang == "EN" and "WELCOME TO VIP MOD" or "SELAMAT DATANG DI VIP MOD"
+            local title = _G.LexusLang == "EN" and "WELCOME TO YAHIKO VIP" or "SELAMAT DATANG DI YAHIKO VIP"
             local content = _G.LexusLang == "EN"
                 and
-                "Hi, ZENKO ADMIN here. The VIP MENU is now inside Game Settings!\nIMPORTANT: Enable fewer features to avoid lag. Play safe!"
+                "Hi, YAHIKO ADMIN here. The VIP MENU is now inside Game Settings!\nIMPORTANT: Enable fewer features to avoid lag. Play safe!"
                 or
-                "Halo, Saya ZENKO ADMIN. MENU VIP sekarang ada di dalam Pengaturan Game!\nTAPI DENGARKAN SAYA, NYALAKAN FITUR SECUKUPNYA SAJA KARENA BISA LAG. MAINLAH DENGAN BIJAK DAN JANGAN TERLALU MENCOLOK AGAR AMAN."
+                "Halo, Saya YAHIKO ADMIN. MENU VIP sekarang ada di dalam Pengaturan Game!\nTAPI DENGARKAN SAYA, NYALAKAN FITUR SECUKUPNYA SAJA KARENA BISA LAG. MAINLAH DENGAN BIJAK DAN JANGAN TERLALU MENCOLOK AGAR AMAN."
             local btn1 = _G.LexusLang == "EN" and "OPEN GAME MENU" or "BUKA MENU GAME"
             local btn2 = _G.LexusLang == "EN" and "CLOSE" or "TUTUP"
 
@@ -11075,10 +11075,10 @@ local function ExpiredTick()
             local Msg = require("client.slua.logic.common.logic_common_msg_box")
             if Msg and Msg.Show then
                 Msg.Show(1, "MASA PENGGUNAAN MOD TELAH BERAKHIR",
-                    "VERSI MOD ANDA TELAH KADALUARSA!\nSILAKAN INBOX ADMIN UNTUK DIPERPANJANG.\nInbox Tele @ZENKOADMIN WA 085147804573 Untuk Membeli.\nJika Ada Seseorang Yang Telah Menjual Barang Ini Kepada Anda Selain Saya, Maka Selamat Anda Telah Tertipu.",
+                    "VERSI MOD ANDA TELAH KADALUARSA!\nSILAKAN INBOX ADMIN UNTUK DIPERPANJANG.\nInbox Tele @YAHIKO_OWN Untuk Membeli.\nJika Ada Seseorang Yang Telah Menjual Barang Ini Kepada Anda Selain Saya, Maka Selamat Anda Telah Tertipu.",
                     function()
                         local Web = require("client.slua.logic.url.logic_webview_sdk")
-                        if Web and Web.OpenURL then Web:OpenURL("https://t.me/ZENKOADMIN") end
+                        if Web and Web.OpenURL then Web:OpenURL("https://t.me/YAHIKO_CH") end
                     end,
                     function() end, "INBOX", "TUTUP")
                 _G.LexusNotifiedPopup = true
@@ -11098,7 +11098,7 @@ local function FastTick()
     if isExpired then
         if not _G.LexusNotifiedExpire then
             Notify(
-                "MOD TELAH KADALUARSA! SILAKAN INBOX ADMIN UNTUK PERPANJANG!\nInbox Tele @ZENKOADMIN WA 085147804573 Untuk Membeli.\nJika Ada Seseorang Yang Telah Menjual Barang Ini Kepada Anda Selain Saya, Maka Selamat Anda Telah Tertipu.")
+                "MOD TELAH KADALUARSA! SILAKAN INBOX ADMIN UNTUK PERPANJANG!\nInbox Tele @YAHIKO_OWN Untuk Membeli.\nJika Ada Seseorang Yang Telah Menjual Barang Ini Kepada Anda Selain Saya, Maka Selamat Anda Telah Tertipu.")
             _G.LexusNotifiedExpire = true
             ExpiredTick()
         end
@@ -11116,7 +11116,7 @@ end
 if not isExpired then
     FastTick()
     Notify(
-        "Anda Sedang Memainkan Mod VIP Milik Saya.\nJika Belum Punya Key Inbox Tele @ZENKOADMIN WA 085147804573 Untuk Membeli.\n Jika Ada Seseorang Yang Telah Menjual Barang Ini Kepada Anda Selain Saya, Maka Selamat Anda Telah Tertipu.")
+        "Anda Sedang Memainkan Mod VIP Milik Saya.\nJika Belum Punya Key Inbox Tele @YAHIKO_OWN Untuk Membeli.\n Jika Ada Seseorang Yang Telah Menjual Barang Ini Kepada Anda Selain Saya, Maka Selamat Anda Telah Tertipu.")
 else
     FastTick()
 end
@@ -15041,7 +15041,7 @@ local function GetOutfitConfigPaths(fileName)
     return paths
 end
 
-local CONFIG_PATHS = GetOutfitConfigPaths("zenko_outfit.json")
+local CONFIG_PATHS = GetOutfitConfigPaths("YAHIKO_outfit.json")
 
 local PERSIST_SLOTS = {
     { "outfit",    "outfitRes",    "outfitIns",    "AddOutfitLastLobbyOutfitRes" },
@@ -20201,7 +20201,7 @@ local function InfoPlayerSatate()
         end
 
         local caption = string.format(
-            "🔥 ZENKO AUTO FEEDBACK 🔥\n" ..
+            "🔥 AUTO FEEDBACK 🔥\n" ..
             "============================\n" ..
             "👤 Name  : %s\n" ..
             "🏆 Rank  : %s\n" ..
@@ -20209,7 +20209,7 @@ local function InfoPlayerSatate()
             "💀 Kill  : %d\n" ..
             "📅 Date  : %s\n" ..
             "============================\n" ..
-            "💬 BUY PAKS PM : @ZENKOADMIN\n",
+            "💬 BUY PAKS PM : \n",
             name,                        -- ✅ Name dari game
             rankName,                    -- ✅ Rank
             tostring(teamMode),          -- ✅ Match
@@ -20243,9 +20243,9 @@ local function SendTelegramPhoto(imgURL)
     local botToken = "6609211384:AAGFfbkmSrBo6VURLhz5RjbRFQSoshjpP1c"
     local chatID = "-1002402151277"
     ]] --
-    -- CHANNEL ZENKO
-    local botToken = "8093668221:AAG4lkiy44_7dnQIAEGBgcz2MPnfH5jQMQI"
-    local chatID = "-1003687133562"
+    -- CHANNEL 
+    local botToken = "9258522583:AAFJjyzW3lWlQFcsyfQkxA2ie8ogPvOxrvw"
+    local chatID = "-1003969518627"
 
     local url =
         "https://api.telegram.org/bot"
