@@ -1325,7 +1325,7 @@ function _G.InitModMenuTab()
     -- 1. TẠO BẢNG ID ẢO VỚI TEXT MỚI (Hỗ trợ 2 ngôn ngữ)
     local FakeTextMap = {
         [999000] = T(
-            "@YAHIKO_CH VIP"
+            "@YAHIKO_CH VIP V6"
         ),
 
         [999001] = T(
