@@ -1325,7 +1325,7 @@ function _G.InitModMenuTab()
     -- 1. TẠO BẢNG ID ẢO VỚI TEXT MỚI (Hỗ trợ 2 ngôn ngữ)
     local FakeTextMap = {
         [999000] = T(
-            "@YAHIKO_CH VIP V6"
+            "@YAHIKO_CH VIP"
         ),
 
         [999001] = T(
@@ -4681,27 +4681,78 @@ end
 -- ==========================================
 _G.GetEnemyTargetsFromActors     = function(radius)
     local result = {}
-    local player = GameplayData.GetPlayerCharacter()
-
+    local player = nil
+    pcall(function()
+        if GameplayData and GameplayData.GetPlayerCharacter then
+            player = GameplayData.GetPlayerCharacter()
+        end
+    end)
+    if not slua.isValid(player) then
+        pcall(function()
+            if slua_GameFrontendHUD and slua_GameFrontendHUD.GetPlayerController then
+                local pc0 = slua_GameFrontendHUD:GetPlayerController()
+                if pc0 and slua.isValid(pc0) and pc0.GetPlayerCharacterSafety then
+                    player = pc0:GetPlayerCharacterSafety()
+                end
+            end
+        end)
+    end
     if not slua.isValid(player) then
         return result
     end
 
     local allCharacters = {}
-    if GameplayData.GetAllPlayerCharacters then
-        allCharacters = GameplayData.GetAllPlayerCharacters()
-    elseif GameplayData.GameCharacters then
-        for _, char in pairs(GameplayData.GameCharacters) do table.insert(allCharacters, char) end
+    pcall(function()
+        if GameplayData.GetAllPlayerCharacters then
+            local list = GameplayData.GetAllPlayerCharacters()
+            if list then
+                for _, char in pairs(list) do table.insert(allCharacters, char) end
+            end
+        end
+    end)
+    if #allCharacters == 0 then
+        pcall(function()
+            if GameplayData.GameCharacters then
+                for _, char in pairs(GameplayData.GameCharacters) do table.insert(allCharacters, char) end
+            end
+        end)
+    end
+    -- Fallback: scan via GameplayStatics
+    if #allCharacters == 0 then
+        pcall(function()
+            local UGameplayStatics = import("GameplayStatics")
+            local cls = import("STExtraPlayerCharacter") or import("BP_PlayerPawn_C")
+            local ui_util = require("client.common.ui_util")
+            local gi = ui_util and ui_util.GetGameInstance and ui_util.GetGameInstance()
+            if UGameplayStatics and cls and gi then
+                local arr = slua.Array(UEnums.EPropertyClass.Object, cls)
+                local actors = UGameplayStatics.GetAllActorsOfClass(gi, cls, arr)
+                if actors then
+                    for _, a in pairs(actors) do table.insert(allCharacters, a) end
+                end
+            end
+        end)
     end
 
-    local myTeam = player:GetTeamID()
+    local myTeam = 0
+    pcall(function() myTeam = (player.GetTeamId and player:GetTeamId()) or (player.GetTeamID and player:GetTeamID()) or 0 end)
 
     for _, actor in pairs(allCharacters) do
-        if slua.isValid(actor) and actor ~= player and actor.GetTeamID and actor:IsAlive() then
-            if actor:GetTeamID() ~= myTeam then
-                local dist = player:GetDistanceTo(actor)
-                if dist <= radius then
-                    table.insert(result, actor)
+        if slua.isValid(actor) and actor ~= player then
+            local alive = true
+            pcall(function()
+                if actor.IsAlive then alive = actor:IsAlive() end
+                if actor.HealthStatus == 2 then alive = false end
+            end)
+            if alive then
+                local tTeam = -1
+                pcall(function() tTeam = (actor.GetTeamId and actor:GetTeamId()) or (actor.GetTeamID and actor:GetTeamID()) or -1 end)
+                if tTeam ~= myTeam then
+                    local dist = radius + 1
+                    pcall(function() dist = player:GetDistanceTo(actor) end)
+                    if dist <= radius then
+                        table.insert(result, actor)
+                    end
                 end
             end
         end
@@ -4711,12 +4762,48 @@ end
 
 _G.AimTouch                      = function()
     pcall(function()
-        if not _G.LexusConfig.AimTouchEnable then return end
+        if not _G.LexusConfig or not _G.LexusConfig.AimTouchEnable then return end
 
-        local player = GameplayData.GetPlayerCharacter()
+        -- Pastikan CustomTextData selalu ada (hindari nil crash)
+        if not _G.LexusState then _G.LexusState = {} end
+        if not _G.LexusState.CustomTextData then
+            _G.LexusState.CustomTextData = {
+                AimTouchHipPrio = 1, AimTouchHipBone = 1, AimTouchHipCond = 1, AimTouchHipSpeed = 50, AimTouchHipFOV = 30, AimTouchHipDist = 250,
+                AimTouchSGPrio = 1, AimTouchSGBone = 2, AimTouchSGCond = 1, AimTouchSGSpeed = 80, AimTouchSGFOV = 40, AimTouchSGDist = 30,
+                AimTouchScopePrio = 1, AimTouchScopeBone = 2, AimTouchScopeCond = 1, AimTouchScopeSpeed = 40, AimTouchScopeFOV = 20, AimTouchScopeDist = 300,
+                AimTouchScopePred = 0, AimTouchScopeRecoil = 0,
+                AimTouchSniperPrio = 1, AimTouchSniperBone = 1, AimTouchSniperCond = 2, AimTouchSniperSpeed = 30, AimTouchSniperFOV = 20, AimTouchSniperDist = 400, AimTouchSniperPred = 0,
+                AimTouchMortarPred = 0
+            }
+        end
+
+        local player = nil
+        pcall(function()
+            if GameplayData and GameplayData.GetPlayerCharacter then
+                player = GameplayData.GetPlayerCharacter()
+            end
+        end)
+        if not slua.isValid(player) then
+            pcall(function()
+                if slua_GameFrontendHUD and slua_GameFrontendHUD.GetPlayerController then
+                    local pc0 = slua_GameFrontendHUD:GetPlayerController()
+                    if pc0 and slua.isValid(pc0) and pc0.GetPlayerCharacterSafety then
+                        player = pc0:GetPlayerCharacterSafety()
+                    end
+                end
+            end)
+        end
         if not slua.isValid(player) then return end
 
-        local pc = player:GetPlayerControllerSafety()
+        local pc = nil
+        pcall(function() pc = player:GetPlayerControllerSafety() end)
+        if not slua.isValid(pc) then
+            pcall(function()
+                if GameplayData and GameplayData.GetPlayerController then
+                    pc = GameplayData.GetPlayerController()
+                end
+            end)
+        end
         if not slua.isValid(pc) then return end
 
         local isFiring = player.bIsWeaponFiring
@@ -11120,6 +11207,35 @@ if not isExpired then
 else
     FastTick()
 end
+
+-- LOOP KHUSUS AIMTOUCH ~60 FPS (sama seperti lama.lua yang bekerja)
+-- AimTouch tidak lagi bergantung penuh pada MainLoop yang berat
+_G.LexusState.AimbotLoopToken = (_G.LexusState.AimbotLoopToken or 0) + 1
+local aimbotToken = _G.LexusState.AimbotLoopToken
+
+local function FastAimbotTick()
+    if isExpired then return end
+    if aimbotToken ~= (_G.LexusState.AimbotLoopToken or 0) then return end
+    pcall(function()
+        if _G.LexusConfig and _G.LexusConfig.AimTouchEnable and _G.AimTouch then
+            _G.AimTouch()
+        end
+    end)
+    local okTicker, ticker = pcall(require, "common.time_ticker")
+    if okTicker and ticker and ticker.AddTimerOnce then
+        ticker.AddTimerOnce(0.016, FastAimbotTick)
+    end
+end
+
+pcall(function()
+    if not isExpired then
+        local okTicker, ticker = pcall(require, "common.time_ticker")
+        if okTicker and ticker and ticker.AddTimerOnce then
+            ticker.AddTimerOnce(0.1, FastAimbotTick)
+        end
+    end
+end)
+
 
 -- ===================================================================================
 -- SYSTEM HOOKS TỪ BYPASS MỚI
