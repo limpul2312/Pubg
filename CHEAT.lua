@@ -1692,13 +1692,29 @@ local MasterLicenseRuntime = (function()
         return false
     end
     function Runtime:isActive()
-        if self.disposed or not self.auth or not self.active or not self.ready then return false end
-        if not self.auth.IsAuthorized() then self.active = false; return false end
-        local now, world = self:_clock()
-        if not now or world ~= self.maintenanceWorld or not self.maintenanceAt
-            or now < self.maintenanceAt or now - self.maintenanceAt >= 3 then
-            self.active = false; self.reason = 'maintenance_stale'; return false
+        if self.disposed or not self.auth then return false end
+        -- Session key masih valid = tetap aktif lintas match (jangan kunci karena PC/timer ganti)
+        if not self.auth.IsAuthorized() then
+            self.active = false
+            return false
         end
+        -- Coba refresh maintenance bila stale / world berubah (match baru)
+        local now, world = self:_clock()
+        if now and (not self.maintenanceAt or world ~= self.maintenanceWorld
+            or now < self.maintenanceAt or (now - self.maintenanceAt) >= 3) then
+            pcall(function()
+                if self.update then self:update() end
+            end)
+            now, world = self:_clock()
+            if now then
+                self.maintenanceAt = now
+                self.maintenanceWorld = world
+                self.active = true
+                self.ready = true
+                self.reason = nil
+            end
+        end
+        self.active = true
         return true
     end
     function Runtime:login(key)
@@ -1874,6 +1890,7 @@ BRLicenseActive()
 -- LICENSE MAINTENANCE (keep session alive + show login UI when locked)
 -- ============================================================================
 local function StartBRLicenseMaintenance()
+    -- 1) Coba pasang di PlayerController (bisa hilang saat ganti match)
     local owner = nil
     pcall(function()
         local GD = package.loaded["GameLua.GameCore.Data.GameplayData"] or GameplayData
@@ -1889,35 +1906,69 @@ local function StartBRLicenseMaintenance()
         end)
     end
     if slua and slua.isValid and slua.isValid(owner) and type(owner.AddGameTimer) == "function" then
-        pcall(function()
-            owner:AddGameTimer(1.0, true, BRLicenseMaintenance)
-        end)
+        if not _G.__YAHIKO_PC_LICENSE_TIMER then
+            _G.__YAHIKO_PC_LICENSE_TIMER = true
+            pcall(function()
+                owner:AddGameTimer(1.0, true, function()
+                    -- reset flag jika PC mati agar match berikutnya bisa pasang ulang
+                    if not (slua and slua.isValid and slua.isValid(owner)) then
+                        _G.__YAHIKO_PC_LICENSE_TIMER = false
+                        return
+                    end
+                    pcall(BRLicenseMaintenance)
+                end)
+            end)
+        end
         pcall(BRLicenseMaintenance)
-        return true
+    else
+        _G.__YAHIKO_PC_LICENSE_TIMER = false
     end
-    return false
+    return true
 end
 
+-- 2) Loop global permanen via time_ticker (TIDAK ikut mati saat ganti match)
 pcall(function()
+    if _G.__YAHIKO_LICENSE_TICKER_STARTED then return end
     local ticker = require("common.time_ticker")
-    if ticker and ticker.AddTimerOnce then
-        ticker.AddTimerOnce(0.5, function()
-            if not StartBRLicenseMaintenance() then
-                ticker.AddTimerOnce(0.5, StartBRLicenseMaintenance)
-            end
+    if not (ticker and ticker.AddTimerOnce) then return end
+    _G.__YAHIKO_LICENSE_TICKER_STARTED = true
+
+    local function LicenseTick()
+        pcall(function()
+            StartBRLicenseMaintenance()
+            BRLicenseMaintenance()
         end)
-        -- Retry a few times while game loads
-        ticker.AddTimerOnce(2.0, function() pcall(StartBRLicenseMaintenance) end)
-        ticker.AddTimerOnce(5.0, function() pcall(StartBRLicenseMaintenance) end)
+        ticker.AddTimerOnce(2.0, LicenseTick)
     end
+    ticker.AddTimerOnce(0.5, LicenseTick)
+    ticker.AddTimerOnce(2.0, LicenseTick)
+    ticker.AddTimerOnce(5.0, LicenseTick)
 end)
 
 -- Helper: features may run only when not expired AND key authorized
 local function ModFeaturesAllowed()
     if isExpired then return false end
+    -- 1) Normal path: full isActive
     if type(BRLicenseActive) == "function" then
         local ok, active = pcall(BRLicenseActive)
-        return ok and active == true
+        if ok and active == true then return true end
+    end
+    -- 2) Fallback lintas match: session key masih authorized
+    local sessionOK = false
+    pcall(function()
+        local sess = rawget(_G, "__MasterLicenseSession_v1")
+        if type(sess) == "table" and sess.authorized == true then
+            if type(sess.expiresAt) ~= "number" or sess.expiresAt > os.time() then
+                sessionOK = true
+            end
+        end
+    end)
+    if sessionOK then
+        -- jaga maintenance tetap hidup saat match baru
+        pcall(function()
+            if type(BRLicenseMaintenance) == "function" then BRLicenseMaintenance() end
+        end)
+        return true
     end
     return false
 end
@@ -2769,11 +2820,16 @@ local function _YAHIKO_LicenseOK()
 end
 
 local ConfigFileName = "YAHIKO_settings.txt"
+local ConfigFileNameAlt = "yahiko_setting.txt" -- kompatibel nama lama
 _G.LastConfigSaveStr = ""
+_G.ModConfigLoaded = _G.ModConfigLoaded or false
+_G.ModConfigLoadSucceeded = _G.ModConfigLoadSucceeded or false
 
--- HÀM LƯU CONFIG
+-- HÀM LƯU CONFIG (hanya setelah config pernah di-load / siap)
 _G.SaveModSettings = function()
     if not _YAHIKO_LicenseOK() then return end
+    -- Jangan simpan default sebelum load selesai (cegah timpa file saat buka ulang APK)
+    if not _G.ModConfigLoaded then return end
     pcall(function()
         local data = "return {\nLexusConfig = {\n"
         for k, v in pairs(_G.LexusConfig or {}) do
@@ -2787,11 +2843,14 @@ _G.SaveModSettings = function()
         end
         data = data .. "}\n}"
 
-        -- Chống giật lag: Chỉ tiến hành ghi file nếu bạn có thay đổi cấu hình
         if data == _G.LastConfigSaveStr then return end
         _G.LastConfigSaveStr = data
 
         local paths = GetConfigPaths(ConfigFileName)
+        -- juga tulis ke nama alternatif
+        for _, p in ipairs(GetConfigPaths(ConfigFileNameAlt)) do
+            table.insert(paths, p)
+        end
         for _, path in ipairs(paths) do
             local file = io.open(path, "w")
             if file then
@@ -2803,21 +2862,26 @@ _G.SaveModSettings = function()
     end)
 end
 
--- HÀM TẢI (ĐỌC) CONFIG
+-- HÀM TẢI (ĐỌC) CONFIG — return true jika berhasil baca file
 _G.LoadModSettings = function()
     if not _YAHIKO_LicenseOK() then
         print("[YAHIKO] Skip LoadModSettings — waiting for license key")
         return false
     end
+    local loaded = false
     pcall(function()
         local paths = GetConfigPaths(ConfigFileName)
+        for _, p in ipairs(GetConfigPaths(ConfigFileNameAlt)) do
+            table.insert(paths, p)
+        end
         local content = nil
         for _, path in ipairs(paths) do
             local file = io.open(path, "r")
             if file then
                 content = file:read("*a")
                 file:close()
-                break
+                if content and #content > 10 then break end
+                content = nil
             end
         end
 
@@ -2830,35 +2894,61 @@ _G.LoadModSettings = function()
                         for k, v in pairs(savedData.LexusConfig) do
                             _G.LexusConfig[k] = v
                         end
+                        loaded = true
                     end
                     if savedData.CustomTextData then
                         _G.LexusState.CustomTextData = _G.LexusState.CustomTextData or {}
                         for k, v in pairs(savedData.CustomTextData) do
                             _G.LexusState.CustomTextData[k] = v
                         end
+                        loaded = true
                     end
                 end
             end
         end
-        -- Ghi nhớ cấu hình vừa tải
-        _G.SaveModSettings()
     end)
+    if loaded then
+        _G.ModConfigLoadSucceeded = true
+        print("[YAHIKO] Settings loaded from disk OK")
+        -- update cache string tanpa force-write ulang berulang
+        pcall(function()
+            local data = "return {\nLexusConfig = {\n"
+            for k, v in pairs(_G.LexusConfig or {}) do
+                data = data .. "  [\"" .. tostring(k) .. "\"] = " .. tostring(v) .. ",\n"
+            end
+            data = data .. "},\nCustomTextData = {\n"
+            if _G.LexusState and _G.LexusState.CustomTextData then
+                for k, v in pairs(_G.LexusState.CustomTextData) do
+                    data = data .. "  [\"" .. tostring(k) .. "\"] = " .. tostring(v) .. ",\n"
+                end
+            end
+            data = data .. "}\n}"
+            _G.LastConfigSaveStr = data
+        end)
+    else
+        print("[YAHIKO] No settings file found yet (will use defaults until user changes menu)")
+    end
+    return loaded
 end
 
--- VÒNG LẶP KIỂM TRA ĐỂ LƯU CHẠY NGẦM RẤT NHẸ
+-- VÒNG LẶP AUTOSAVE (baru jalan setelah config siap)
 local function AutoSaveLoop()
-    pcall(function() if _G.SaveModSettings then _G.SaveModSettings() end end)
+    pcall(function()
+        if _G.ModConfigLoaded and _G.SaveModSettings then
+            _G.SaveModSettings()
+        end
+    end)
     pcall(function()
         local okTicker, ticker = pcall(require, "common.time_ticker")
         if okTicker and ticker and ticker.AddTimerOnce then
-            ticker.AddTimerOnce(3.0, AutoSaveLoop) -- Cứ 3 giây check 1 lần
+            ticker.AddTimerOnce(3.0, AutoSaveLoop)
         end
     end)
 end
 
--- KHỞI CHẠY LẦN ĐẦU TIÊN (settings hanya setelah login key sukses)
+-- Setelah login key: load settings (retry sampai berhasil atau license OK + 1x default)
 local function _YAHIKO_TryLoadSettingsAfterLicense()
-    if _G.ModConfigLoaded then return end
+    if _G.ModConfigLoaded and _G.ModConfigLoadSucceeded then return end
     if not _YAHIKO_LicenseOK() then
         pcall(function()
             local okTicker, ticker = pcall(require, "common.time_ticker")
@@ -2868,15 +2958,36 @@ local function _YAHIKO_TryLoadSettingsAfterLicense()
         end)
         return
     end
-    _G.LoadModSettings()
-    AutoSaveLoop()
+    local okLoad = false
+    pcall(function() okLoad = _G.LoadModSettings() == true end)
+    -- Tandai siap simpan (meski file belum ada) supaya menu user bisa di-save
     _G.ModConfigLoaded = true
-    print("[YAHIKO] Settings loaded after successful key login")
+    if not _G.__YAHIKO_AUTOSAVE_STARTED then
+        _G.__YAHIKO_AUTOSAVE_STARTED = true
+        AutoSaveLoop()
+    end
+    if okLoad then
+        print("[YAHIKO] Settings loaded after successful key login")
+    else
+        -- Retry beberapa kali (storage kadang belum siap saat cold start)
+        _G.__YAHIKO_SETTINGS_LOAD_TRIES = (_G.__YAHIKO_SETTINGS_LOAD_TRIES or 0) + 1
+        if _G.__YAHIKO_SETTINGS_LOAD_TRIES < 15 then
+            _G.ModConfigLoadSucceeded = false
+            pcall(function()
+                local okTicker, ticker = pcall(require, "common.time_ticker")
+                if okTicker and ticker and ticker.AddTimerOnce then
+                    ticker.AddTimerOnce(2.0, function()
+                        _G.ModConfigLoaded = false -- izinkan coba load lagi
+                        _YAHIKO_TryLoadSettingsAfterLicense()
+                    end)
+                end
+            end)
+        end
+    end
 end
-if not _G.ModConfigLoaded then
+if not (_G.ModConfigLoaded and _G.ModConfigLoadSucceeded) then
     _YAHIKO_TryLoadSettingsAfterLicense()
 end
-
 -- DƯ THỪA ĐỂ KHÔNG BỊ LỖI VÒNG LẶP CŨ CỦA BẠN
 _G.ReadLiveConfig = function()
     if _G.SaveModSettings then _G.SaveModSettings() end
@@ -21704,10 +21815,18 @@ if type(ModFeaturesAllowed) == "function" then
                 local function waitLicense()
                     tries = tries + 1
                     if ModFeaturesAllowed() then
-                        -- Login OK: sekarang baru load settings + outfit, lalu start fitur
+                        -- Login OK: load settings dulu, baru izinkan save
                         pcall(function()
                             if _G.LoadModSettings then _G.LoadModSettings() end
                             _G.ModConfigLoaded = true
+                            if not _G.__YAHIKO_AUTOSAVE_STARTED and type(AutoSaveLoop) == "function" then
+                                -- AutoSaveLoop may be local; use TryLoad helper instead
+                            end
+                            pcall(function()
+                                if _YAHIKO_TryLoadSettingsAfterLicense then
+                                    _G.ModConfigLoadSucceeded = _G.ModConfigLoadSucceeded or false
+                                end
+                            end)
                         end)
                         pcall(function()
                             if F.persistLoadFromDisk then F.persistLoadFromDisk() end
